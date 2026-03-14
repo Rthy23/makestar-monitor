@@ -1,0 +1,73 @@
+modules = ["nodejs-24", "python-3.11"]
+
+[[artifacts]]
+id = "artifacts/api-server"
+
+[[artifacts]]
+id = "artifacts/mockup-sandbox"
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Makestar Monitor (Streamlit Dashboard)"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Makestar Stock Monitor"
+
+[[workflows.workflow]]
+name = "Makestar Monitor (Streamlit Dashboard)"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f 'streamlit run app.py' 2>/dev/null; fuser -k 8000/tcp 2>/dev/null; sleep 1; cd makestar-monitor && python3 -m streamlit run app.py --server.port 8000 --server.address 0.0.0.0 --server.headless true --server.enableCORS false --server.enableXsrfProtection false"
+waitForPort = 8000
+
+[[workflows.workflow]]
+name = "Makestar Stock Monitor"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd makestar-monitor && python3 monitor.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
+integrations = ["github:1.0.0"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[nix]
+channel = "stable-25_05"
+packages = ["gitFull", "glibcLocales", "playwright-driver", "chromium", "nspr", "nss"]
+
+[userenv]
+
+[userenv.shared]
+SUPABASE_URL = "https://dldxbxkjctonqgkrdpes.supabase.co"
+SUPABASE_KEY = "sb_publishable_4kUlPWrfMsI9wekP6W2IbQ_VY1rtGo9"
