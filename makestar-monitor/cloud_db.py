@@ -148,3 +148,57 @@ def read_transactions():
 def read_participants():
     """Return list-of-dicts ordered by rank, or None."""
     return _get_list("participants", {"order": "total_quantity.desc,first_purchase_at.asc"})
+
+
+def read_transactions_df() -> "pd.DataFrame | None":
+    """
+    從 Supabase 讀取 transactions 表的完整資料，回傳 pandas DataFrame。
+    欄位：user_id, order_id, country, quantity, timestamp, is_automated
+    失敗或未啟用時回傳 None。
+    """
+    if not enabled():
+        return None
+    try:
+        import pandas as pd
+        rows: list = []
+        # PostgREST 預設上限 1000；用 Range 分頁確保拿全
+        offset = 0
+        batch  = 1000
+        while True:
+            chunk = _get_list(
+                "transactions",
+                {
+                    "select": "user_id,order_id,country,quantity,timestamp,is_automated",
+                    "order":  "id.asc",
+                    "limit":  batch,
+                    "offset": offset,
+                },
+            )
+            if not chunk:
+                break
+            rows.extend(chunk)
+            if len(chunk) < batch:
+                break
+            offset += batch
+
+        if not rows:
+            return pd.DataFrame(columns=[
+                "user_id", "order_id", "country", "quantity",
+                "timestamp", "is_automated",
+            ])
+
+        df = pd.DataFrame(rows)
+        for col in ["user_id", "order_id", "country", "timestamp"]:
+            if col not in df.columns:
+                df[col] = None
+        if "quantity" not in df.columns:
+            df["quantity"] = 1
+        if "is_automated" not in df.columns:
+            df["is_automated"] = 0
+        df["quantity"]     = pd.to_numeric(df["quantity"],     errors="coerce").fillna(1).astype(int)
+        df["is_automated"] = pd.to_numeric(df["is_automated"], errors="coerce").fillna(0).astype(int)
+        return df
+
+    except Exception as exc:
+        logger.debug("Supabase read_transactions_df: %s", exc)
+        return None
